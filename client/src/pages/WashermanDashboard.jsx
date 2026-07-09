@@ -33,42 +33,46 @@ const STATUS_PROGRESS = {
 export default function WashermanDashboard() {
   const { user } = useContext(AuthContext);
   const [orders, setOrders] = useState([]);
-  const [tab, setTab] = useState('incoming'); // incoming | active | completed
+  const [tab, setTab] = useState('incoming');
   const [updatingId, setUpdatingId] = useState(null);
 
   useEffect(() => {
-    // FIX 1: Remove '/api' from the URL because Socket.IO connects to the root domain
     const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace('/api', '');
     
-    // FIX 2: Add transports and credentials for stable Railway/Vercel connection
+    // ✅ FIX: Force polling transport for Railway
     socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
-      withCredentials: true
+      transports: ['polling'], // ✅ Sirf polling use kare
+      withCredentials: true,
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 10
     });
 
     if (user?._id) {
       socket.emit('join', user._id);
     }
 
-    // FIX 3: Listen to 'newOrder' event (matches the backend emit event)
-    socket.on('newOrder', (newOrder) => {
-      console.log('🔔 New Order Received via Socket:', newOrder);
-      fetchOrders(); // Refresh the order list immediately
-      
-      // Optional: Play a sound or show a browser notification here
-      // new Audio('/notification.mp3').play(); 
+    socket.on('connect', () => {
+      console.log('✅ Socket connected successfully');
     });
 
-    // Listen to status updates as well
+    socket.on('newOrder', (newOrder) => {
+      console.log('🔔 New Order Received via Socket:', newOrder);
+      fetchOrders();
+    });
+
     socket.on('orderStatusUpdated', () => fetchOrders());
 
-    // Cleanup on unmount
+    socket.on('connect_error', (error) => {
+      console.error('❌ Socket connection error:', error);
+    });
+
     return () => {
       socket.off('newOrder');
       socket.off('orderStatusUpdated');
       socket.disconnect();
     };
-  }, [user?._id]); // Added user?._id as dependency to prevent infinite re-renders
+  }, [user?._id]);
 
   const fetchOrders = async () => {
     try {
@@ -77,11 +81,8 @@ export default function WashermanDashboard() {
     } catch (e) { console.error(e); }
   };
 
-  // Incoming: unassigned Pending orders
   const incoming = orders.filter(o => o.status === 'Pending' && !o.washerman);
-  // Active: assigned to me, accepted but not completed
   const active = orders.filter(o => o.washerman?._id === user._id && o.status !== 'Completed' && o.status !== 'Cancelled');
-  // Completed: assigned to me and completed
   const completed = orders.filter(o => o.washerman?._id === user._id && o.status === 'Completed');
 
   const stats = [
@@ -155,7 +156,6 @@ export default function WashermanDashboard() {
         </p>
       </motion.div>
 
-      {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
         {stats.map((s, i) => (
           <motion.div
@@ -177,7 +177,6 @@ export default function WashermanDashboard() {
         ))}
       </div>
 
-      {/* Tabs */}
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
         {[
           { id: 'incoming', label: 'Incoming', count: incoming.length },
@@ -205,7 +204,6 @@ export default function WashermanDashboard() {
         ))}
       </div>
 
-      {/* Order Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 360px), 1fr))', gap: '1.25rem' }}>
         <AnimatePresence mode="popLayout">
           {list.length === 0 && (
@@ -235,7 +233,6 @@ export default function WashermanDashboard() {
               className="card-3d"
               style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}
             >
-              {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1.1rem' }}>#{order._id.slice(-6).toUpperCase()}</h3>
@@ -251,7 +248,6 @@ export default function WashermanDashboard() {
                 </span>
               </div>
 
-              {/* Customer Info */}
               <div style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '12px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.9rem' }}>
                   <User size={15} color="#FFD700" />
@@ -276,7 +272,6 @@ export default function WashermanDashboard() {
                 </div>
               </div>
 
-              {/* Progress Bar (Active + Completed) */}
               {tab !== 'incoming' && (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
@@ -301,7 +296,6 @@ export default function WashermanDashboard() {
                 </div>
               )}
 
-              {/* Incoming: Accept Button */}
               {tab === 'incoming' && (
                 <motion.button
                   whileHover={{ scale: 1.02 }}
@@ -316,7 +310,6 @@ export default function WashermanDashboard() {
                 </motion.button>
               )}
 
-              {/* Active: Status + Progress Controls */}
               {tab === 'active' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
                   <div>
@@ -373,7 +366,6 @@ export default function WashermanDashboard() {
                 </div>
               )}
 
-              {/* Completed badge */}
               {tab === 'completed' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#10b981', fontSize: '0.9rem', fontWeight: 600 }}>
                   <CheckCircle2 size={18} /> Job Completed Successfully

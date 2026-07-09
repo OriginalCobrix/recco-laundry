@@ -10,19 +10,24 @@ connectDB();
 
 const server = http.createServer(app);
 
-// ✅ FIX: Socket.IO CORS ko bhi exact domains allow karein
 const allowedOrigins = [
   'https://recco-laundry-alpha.vercel.app',
   'http://localhost:5173',
   'http://localhost:3000'
 ];
 
+// ✅ FIX: Force polling transport for Railway compatibility
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins, // '*' ki jagah exact array
+    origin: allowedOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
-  }
+  },
+  // ✅ FIX: Railway ke liye important settings
+  transports: ['polling', 'websocket'], // Polling pehle try kare
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  allowEIO3: true
 });
 
 global.io = io;
