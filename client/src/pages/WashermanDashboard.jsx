@@ -36,13 +36,13 @@ export default function WashermanDashboard() {
   const [tab, setTab] = useState('incoming'); // incoming | active | completed
   const [updatingId, setUpdatingId] = useState(null);
 
-  useEffect(() => {
-  const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-  socket = io(SOCKET_URL);
-  socket.emit('join', user._id);
-  socket.on('new_notification', () => fetchOrders());
-  return () => socket?.disconnect();
-}, [user]);
+    useEffect(() => {
+    const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    socket = io(SOCKET_URL);
+    socket.emit('join', user._id);
+    socket.on('new_notification', () => fetchOrders());
+    return () => socket.disconnect();
+  }, [user]);
 
   const fetchOrders = async () => {
     try {

@@ -5,7 +5,7 @@ import DashboardLayout from '../components/DashboardLayout';
 import { motion } from 'framer-motion';
 import io from 'socket.io-client';
 import { ShoppingBag, Clock, CheckCircle, MapPin, Phone, Calendar } from 'lucide-react';
-import io from 'socket.io-client';
+
 
 let socket;
 
@@ -14,12 +14,12 @@ export default function CustomerDashboard() {
   const [orders, setOrders] = useState([]);
 
   useEffect(() => {
-  const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-  socket = io(SOCKET_URL);
-  socket.emit('join', user._id);
-  socket.on('new_notification', () => fetchOrders());
-  return () => socket?.disconnect();
-}, [user]);
+    const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    socket = io(SOCKET_URL);
+    socket.emit('join', user._id);
+    socket.on('new_notification', () => fetchOrders());
+    return () => socket.disconnect();
+  }, [user]);
 
   const fetchOrders = async () => {
     try { const res = await api.get('/orders/my-orders'); setOrders(res.data); } catch (e) { console.error(e); }
