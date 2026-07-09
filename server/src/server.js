@@ -10,14 +10,14 @@ connectDB();
 
 const server = http.createServer(app);
 
-// ✅ FIX: Sirf polling transport, websocket ko completely remove kiya
+// ✅ FINAL FIX: Sirf polling, websocket completely disabled
 const io = new Server(server, {
   cors: {
     origin: "*", 
     methods: ['GET', 'POST', 'PUT', 'DELETE']
   },
   transports: ['polling'], // ✅ Sirf polling, websocket hata diya
-  allowEIO3: true,
+  allowEIO3: true, // ✅ Important for compatibility
   pingTimeout: 60000,
   pingInterval: 25000
 });
