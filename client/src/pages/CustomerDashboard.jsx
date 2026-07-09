@@ -1,28 +1,78 @@
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState, useContext, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import DashboardLayout from '../components/DashboardLayout';
 import { motion } from 'framer-motion';
-import io from 'socket.io-client'; // <-- Sirf ek baar yahan hona chahiye
+import { io } from 'socket.io-client';
 import { ShoppingBag, Clock, CheckCircle, MapPin, Phone, Calendar } from 'lucide-react';
-
-
-let socket;
 
 export default function CustomerDashboard() {
   const { user } = useContext(AuthContext);
   const [orders, setOrders] = useState([]);
+  const socketRef = useRef(null);
 
   useEffect(() => {
-    const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-    socket = io(SOCKET_URL);
+    if (!user?._id) return;
+
+    // ✅ FIX: Remove '/api' from URL for socket connection
+    const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace('/api', '');
+    console.log('🔍 Customer Socket URL:', SOCKET_URL);
+
+    // ✅ FIX: Create socket only once using useRef
+    if (!socketRef.current) {
+      socketRef.current = io(SOCKET_URL, {
+        transports: ['polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        timeout: 20000
+      });
+    }
+
+    const socket = socketRef.current;
+
+    // Join customer's room
     socket.emit('join', user._id);
-    socket.on('new_notification', () => fetchOrders());
-    return () => socket.disconnect();
-  }, [user]);
+    console.log('✅ Customer joined room:', user._id);
+
+    socket.on('connect', () => {
+      console.log('✅ Customer Socket connected:', socket.id);
+      // Re-join room after reconnection
+      socket.emit('join', user._id);
+    });
+
+    // ✅ FIX: Listen to correct events from backend
+    socket.on('orderAccepted', (order) => {
+      console.log('🔔 Order Accepted by Washerman:', order);
+      fetchOrders();
+    });
+
+    socket.on('orderStatusUpdated', (order) => {
+      console.log('🔔 Order Status Updated:', order);
+      fetchOrders();
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('❌ Customer Socket error:', error.message);
+    });
+
+    // Initial fetch
+    fetchOrders();
+
+    return () => {
+      socket.off('orderAccepted');
+      socket.off('orderStatusUpdated');
+      socket.off('connect');
+      socket.off('connect_error');
+    };
+  }, [user?._id]);
 
   const fetchOrders = async () => {
-    try { const res = await api.get('/orders/my-orders'); setOrders(res.data); } catch (e) { console.error(e); }
+    try {
+      const res = await api.get('/orders/my-orders');
+      setOrders(res.data);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const stats = [
@@ -120,6 +170,7 @@ export default function CustomerDashboard() {
                   </div>
                   <div className="progress-track">
                     <motion.div 
+                      key={order.progress}
                       initial={{ width: 0 }} 
                       animate={{ width: `${order.progress || 0}%` }} 
                       transition={{ duration: 0.8 }}
@@ -143,6 +194,7 @@ export default function CustomerDashboard() {
                   ))}
                   <div className="timeline-line">
                     <motion.div 
+                      key={currentStepIndex}
                       initial={{ width: '0%' }} 
                       animate={{ width: `${(currentStepIndex / (trackingSteps.length - 1)) * 100}%` }} 
                       transition={{ duration: 1, ease: 'easeOut' }} 
@@ -211,7 +263,6 @@ export default function CustomerDashboard() {
         .timeline-line { position: absolute; top: 28px; left: 10%; right: 10%; height: 2px; background: #333; z-index: 1; }
         .timeline-line-fill { height: 100%; background: linear-gradient(90deg, #FFD700, #FFA500); }
         
-        /* RESPONSIVE FIXES */
         @media (max-width: 768px) {
           .order-card { padding: 1.5rem; }
           .progress-section { margin-bottom: 2rem; }
@@ -226,8 +277,6 @@ export default function CustomerDashboard() {
           .stats-grid { grid-template-columns: 1fr; gap: 1rem; }
           .stat-card { padding: 1.2rem; }
           .stat-info h3 { font-size: 1.5rem; }
-          
-          /* Timeline becomes horizontally scrollable to prevent text breakage */
           .tracking-timeline { 
             transform: none; 
             overflow-x: auto; 
