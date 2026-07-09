@@ -12,39 +12,19 @@ const serviceRoutes = require('./routes/serviceRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const contactRoutes = require('./routes/contactRoutes');
 const errorMiddleware = require('./middlewares/errorMiddleware');
-const sanitizeMiddleware = require('./middlewares/sanitizeMiddleware');
 
 const app = express();
 
 app.set('trust proxy', 1);
 
-// ✅ FIXED CORS - No wildcard route, simple and works
+// ✅ Simple CORS
 app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
-    
-    const allowedOrigins = [
-      'https://recco-laundry-alpha.vercel.app',
-      'http://localhost:5173',
-      'http://localhost:3000'
-    ];
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      // For debugging, allow all origins temporarily
-      callback(null, true);
-    }
-  },
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   optionsSuccessStatus: 200
 }));
-
-// ✅ REMOVED: app.options('*', cors()) - Yeh Express 5 mein crash karta hai
-// cors() middleware already OPTIONS requests handle karta hai
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -57,7 +37,11 @@ app.use('/api', limiter);
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true }));
 
-app.use(sanitizeMiddleware);
+// ✅ Request logging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
 
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
@@ -73,6 +57,12 @@ app.use('/api/services', serviceRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/contact', contactRoutes);
 
+// ✅ Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 app.use(errorMiddleware);
 
-module.exports = app;git add .
+// ✅ LAST LINE - Sirf yeh hona chahiye, kuch aur nahi
+module.exports = app;
