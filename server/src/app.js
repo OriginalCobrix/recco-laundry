@@ -18,17 +18,33 @@ const app = express();
 
 app.set('trust proxy', 1);
 
-// ✅ ULTRA SIMPLE CORS - 100% WORKS
+// ✅ FIXED CORS - No wildcard route, simple and works
 app.use(cors({
-  origin: '*',
-  credentials: false,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'https://recco-laundry-alpha.vercel.app',
+      'http://localhost:5173',
+      'http://localhost:3000'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      // For debugging, allow all origins temporarily
+      callback(null, true);
+    }
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   optionsSuccessStatus: 200
 }));
 
-// ✅ EXPLICIT OPTIONS HANDLER
-app.options('*', cors());
+// ✅ REMOVED: app.options('*', cors()) - Yeh Express 5 mein crash karta hai
+// cors() middleware already OPTIONS requests handle karta hai
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
