@@ -3,7 +3,7 @@ import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import DashboardLayout from '../components/DashboardLayout';
 import { motion } from 'framer-motion';
-import io from 'socket.io-client';
+import io from 'socket.io-client'; // <-- Sirf ek baar yahan hona chahiye
 import { ShoppingBag, Clock, CheckCircle, MapPin, Phone, Calendar } from 'lucide-react';
 
 
