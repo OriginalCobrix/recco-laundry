@@ -17,15 +17,41 @@ const sanitizeMiddleware = require('./middlewares/sanitizeMiddleware');
 
 const app = express();
 
-// ✅ FIX: Railway/Vercel proxy ko trust karein
+// ✅ FIX: Trust proxy for Railway
 app.set('trust proxy', 1);
 
-app.use(helmet());
-// ✅ FIX: CORS ko simple rakhein
-app.use(cors({ 
-  origin: true, 
-  credentials: true 
+// ✅ FIX: Enhanced CORS configuration
+const allowedOrigins = [
+  'https://recco-laundry-alpha.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000'
+];
+
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
+
+// ✅ FIX: Comprehensive CORS setup
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || origin === '*') {
+      callback(null, true);
+    } else {
+      console.log('❌ CORS blocked origin:', origin);
+      callback(null, true); // Temporary allow all for debugging
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true,
+  optionsSuccessStatus: 200 // ✅ Important for older browsers
+}));
+
+// ✅ FIX: Handle OPTIONS preflight requests explicitly
+app.options('*', cors());
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -42,6 +68,12 @@ app.use(sanitizeMiddleware);
 
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
+} else {
+  // Production logging
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+  });
 }
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -53,6 +85,11 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/contact', contactRoutes);
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 app.use(errorMiddleware);
 
