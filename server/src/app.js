@@ -17,13 +17,19 @@ const sanitizeMiddleware = require('./middlewares/sanitizeMiddleware');
 
 const app = express();
 
+// ✅ FIX: Railway/Vercel proxy ko trust karein (express-rate-limit error fix)
+app.set('trust proxy', 1);
+
 app.use(helmet());
-// FIX: origin ko 'true' kar dein taake Vercel ki domain automatically allow ho jaye
-app.use(cors({ origin: true, credentials: true })); 
+// ✅ FIX: CORS ko temporarily open rakhein taake testing mein koi issue na aaye
+app.use(cors({ origin: "*", credentials: true })); 
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1000 // Thora increase kar dein kyunke sockets bhi count hote hain
+  max: 1000,
+  // ✅ FIX: Rate limiter ko bhi proxy ke sath kaam karne dein
+  standardHeaders: true,
+  legacyHeaders: false
 });
 app.use('/api', limiter);
 
