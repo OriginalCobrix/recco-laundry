@@ -22,23 +22,71 @@ exports.register = async (req, res) => {
       finalApprovalStatus = 'Pending Approval';
     }
 
-    const user = await User.create({ name, email, phone, password, role: finalRole, approvalStatus: finalApprovalStatus });
+    const user = await User.create({ 
+      name, 
+      email, 
+      phone, 
+      password, 
+      role: finalRole, 
+      approvalStatus: finalApprovalStatus 
+    });
 
+    // ✅ FIX: Email sending ko safe banaya - agar fail ho toh bhi register successful hoga
     if (finalRole === 'Washerman') {
       const admin = await User.findOne({ role: 'Admin' });
-      if (admin) await createNotification(admin._id, `New Washerman Registration: ${user.name} requires approval.`, 'Approval', user._id);
-      await sendEmail(user.email, 'RECCO - Registration Pending', `<h3>Hello ${user.name},</h3><p>Your washerman account is pending admin approval.</p>`);
+      if (admin) {
+        await createNotification(
+          admin._id, 
+          `New Washerman Registration: ${user.name} requires approval.`, 
+          'Approval', 
+          user._id
+        );
+      }
+      
+      // ✅ Email sending with error handling
+      try {
+        await sendEmail(
+          user.email, 
+          'RECCO - Registration Pending', 
+          `<h3>Hello ${user.name},</h3><p>Your washerman account is pending admin approval.</p>`
+        );
+      } catch (emailError) {
+        console.warn('⚠️ Email sending failed for washerman:', emailError.message);
+        // Don't throw error, continue
+      }
     } else if (finalRole === 'Admin') {
-      await sendEmail(user.email, 'RECCO - Admin Account Created', `<h3>Hello ${user.name},</h3><p>Your Administrator account has been created successfully.</p>`);
+      try {
+        await sendEmail(
+          user.email, 
+          'RECCO - Admin Account Created', 
+          `<h3>Hello ${user.name},</h3><p>Your Administrator account has been created successfully.</p>`
+        );
+      } catch (emailError) {
+        console.warn('⚠️ Email sending failed for admin:', emailError.message);
+      }
     } else {
-      await sendEmail(user.email, 'Welcome to RECCO Laundry', `<h3>Hello ${user.name},</h3><p>Welcome to RECCO!</p>`);
+      try {
+        await sendEmail(
+          user.email, 
+          'Welcome to RECCO Laundry', 
+          `<h3>Hello ${user.name},</h3><p>Welcome to RECCO!</p>`
+        );
+      } catch (emailError) {
+        console.warn('⚠️ Email sending failed for customer:', emailError.message);
+      }
     }
 
     res.status(201).json({
-      _id: user._id, name: user.name, email: user.email, role: user.role, approvalStatus: user.approvalStatus,
-      token: generateToken(user._id), refreshToken: generateRefreshToken(user._id)
+      _id: user._id, 
+      name: user.name, 
+      email: user.email, 
+      role: user.role, 
+      approvalStatus: user.approvalStatus,
+      token: generateToken(user._id), 
+      refreshToken: generateRefreshToken(user._id)
     });
   } catch (error) {
+    console.error('❌ Registration error:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -48,28 +96,49 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
     const user = await User.findOne({ email }).select('+password');
 
-    if (!user || !(await user.matchPassword(password))) return res.status(401).json({ message: 'Invalid credentials' });
+    if (!user || !(await user.matchPassword(password))) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
 
-    if (user.role === 'Washerman' && user.approvalStatus === 'Pending Approval') return res.status(403).json({ message: 'Your account is pending Admin approval.' });
-    if (user.role === 'Washerman' && user.approvalStatus === 'Rejected') return res.status(403).json({ message: `Your account was rejected. Reason: ${user.rejectionReason}` });
+    if (user.role === 'Washerman' && user.approvalStatus === 'Pending Approval') {
+      return res.status(403).json({ message: 'Your account is pending Admin approval.' });
+    }
+    
+    if (user.role === 'Washerman' && user.approvalStatus === 'Rejected') {
+      return res.status(403).json({ message: `Your account was rejected. Reason: ${user.rejectionReason}` });
+    }
 
     res.json({
-      _id: user._id, name: user.name, email: user.email, role: user.role, approvalStatus: user.approvalStatus,
-      token: generateToken(user._id), refreshToken: generateRefreshToken(user._id)
+      _id: user._id, 
+      name: user.name, 
+      email: user.email, 
+      role: user.role, 
+      approvalStatus: user.approvalStatus,
+      token: generateToken(user._id), 
+      refreshToken: generateRefreshToken(user._id)
     });
   } catch (error) {
+    console.error('❌ Login error:', error);
     res.status(500).json({ message: error.message });
   }
 };
 
 exports.refreshToken = async (req, res) => {
   const { refreshToken } = req.body;
-  if (!refreshToken) return res.status(401).json({ message: 'No refresh token provided' });
+  if (!refreshToken) {
+    return res.status(401).json({ message: 'No refresh token provided' });
+  }
+  
   try {
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
     const user = await User.findById(decoded.id);
-    if (!user) return res.status(401).json({ message: 'Invalid refresh token' });
-    res.json({ token: generateToken(user._id), refreshToken: generateRefreshToken(user._id) });
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid refresh token' });
+    }
+    res.json({ 
+      token: generateToken(user._id), 
+      refreshToken: generateRefreshToken(user._id) 
+    });
   } catch (error) {
     res.status(401).json({ message: 'Invalid refresh token' });
   }
