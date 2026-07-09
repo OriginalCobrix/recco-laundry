@@ -17,17 +17,11 @@ const sanitizeMiddleware = require('./middlewares/sanitizeMiddleware');
 
 const app = express();
 
-// ✅ FIX: Railway/Vercel proxy ko trust karein (express-rate-limit error fix)
+// ✅ FIX: Railway/Vercel proxy ko trust karein
 app.set('trust proxy', 1);
 
-// ✅ FIX: Explicitly allow Vercel domain instead of '*'
-const allowedOrigins = [
-  'https://recco-laundry-alpha.vercel.app', // Aapki live Vercel URL
-  'http://localhost:5173',                  // Local development (Vite)
-  'http://localhost:3000'                   // Local development (React)
-];
-
 app.use(helmet());
+// ✅ FIX: CORS ko simple rakhein
 app.use(cors({ 
   origin: true, 
   credentials: true 

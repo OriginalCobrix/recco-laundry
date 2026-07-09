@@ -36,14 +36,15 @@ export default function WashermanDashboard() {
   const [tab, setTab] = useState('incoming');
   const [updatingId, setUpdatingId] = useState(null);
 
-    useEffect(() => {
+  useEffect(() => {
     const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace('/api', '');
     
-    // ✅ FIX: Removed 'withCredentials' to bypass strict CORS 400 error
+    // ✅ FIX: Sirf polling transport, websocket ko completely remove kiya
     socket = io(SOCKET_URL, {
-      transports: ['polling', 'websocket'], // Polling pehle, phir WebSocket
+      transports: ['polling'], // ✅ Sirf polling
       reconnection: true,
       reconnectionDelay: 1000,
+      timeout: 20000
     });
 
     if (user?._id) {
@@ -51,7 +52,7 @@ export default function WashermanDashboard() {
     }
 
     socket.on('connect', () => {
-      console.log('✅ Socket connected successfully via polling/websocket');
+      console.log('✅ Socket connected successfully via polling');
     });
 
     socket.on('newOrder', (newOrder) => {

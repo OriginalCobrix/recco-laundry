@@ -10,19 +10,14 @@ connectDB();
 
 const server = http.createServer(app);
 
-const allowedOrigins = [
-  'https://recco-laundry-alpha.vercel.app',
-  'http://localhost:5173',
-  'http://localhost:3000'
-];
-
-// ✅ FIX: Force polling transport for Railway compatibility
+// ✅ FIX: Sirf polling transport, websocket ko completely remove kiya
 const io = new Server(server, {
   cors: {
     origin: "*", 
     methods: ['GET', 'POST', 'PUT', 'DELETE']
   },
-  transports: ['polling', 'websocket'], // Dono allow karein
+  transports: ['polling'], // ✅ Sirf polling, websocket hata diya
+  allowEIO3: true,
   pingTimeout: 60000,
   pingInterval: 25000
 });
