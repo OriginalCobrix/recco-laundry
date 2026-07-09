@@ -20,14 +20,22 @@ const app = express();
 // ✅ FIX: Railway/Vercel proxy ko trust karein (express-rate-limit error fix)
 app.set('trust proxy', 1);
 
+// ✅ FIX: Explicitly allow Vercel domain instead of '*'
+const allowedOrigins = [
+  'https://recco-laundry-alpha.vercel.app', // Aapki live Vercel URL
+  'http://localhost:5173',                  // Local development (Vite)
+  'http://localhost:3000'                   // Local development (React)
+];
+
 app.use(helmet());
-// ✅ FIX: CORS ko temporarily open rakhein taake testing mein koi issue na aaye
-app.use(cors({ origin: "*", credentials: true })); 
+app.use(cors({ 
+  origin: allowedOrigins, // '*' ki jagah exact array of domains
+  credentials: true 
+})); 
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1000,
-  // ✅ FIX: Rate limiter ko bhi proxy ke sath kaam karne dein
   standardHeaders: true,
   legacyHeaders: false
 });

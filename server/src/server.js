@@ -10,11 +10,16 @@ connectDB();
 
 const server = http.createServer(app);
 
+// ✅ FIX: Socket.IO CORS ko bhi exact domains allow karein
+const allowedOrigins = [
+  'https://recco-laundry-alpha.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000'
+];
+
 const io = new Server(server, {
   cors: {
-    // origin: true automatically frontend ki domain ko allow kar leta hai
-    // Railway par CLIENT_URL set karne ki zaroorat nahi, ya phir usay remove kar dein
-    origin: true, 
+    origin: allowedOrigins, // '*' ki jagah exact array
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
   }
