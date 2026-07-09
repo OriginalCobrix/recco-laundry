@@ -19,15 +19,12 @@ const allowedOrigins = [
 // ✅ FIX: Force polling transport for Railway compatibility
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true
+    origin: "*", 
+    methods: ['GET', 'POST', 'PUT', 'DELETE']
   },
-  // ✅ FIX: Railway ke liye important settings
-  transports: ['polling', 'websocket'], // Polling pehle try kare
+  transports: ['polling', 'websocket'], // Dono allow karein
   pingTimeout: 60000,
-  pingInterval: 25000,
-  allowEIO3: true
+  pingInterval: 25000
 });
 
 global.io = io;

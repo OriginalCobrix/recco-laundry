@@ -29,9 +29,9 @@ const allowedOrigins = [
 
 app.use(helmet());
 app.use(cors({ 
-  origin: allowedOrigins, // '*' ki jagah exact array of domains
+  origin: true, 
   credentials: true 
-})); 
+}));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
