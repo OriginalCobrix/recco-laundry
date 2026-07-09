@@ -4,29 +4,83 @@ import api from '../services/api';
 import DashboardLayout from '../components/DashboardLayout';
 import { motion } from 'framer-motion';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
-import { Users, ShoppingBag, DollarSign, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Users, ShoppingBag, DollarSign, Clock, CheckCircle, XCircle, Package, CheckCircle2 } from 'lucide-react';
+import io from 'socket.io-client';
+
+let socket;
 
 export default function AdminDashboard() {
   const { user } = useContext(AuthContext);
   const [stats, setStats] = useState({});
   const [washermen, setWashermen] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [updatingOrderId, setUpdatingOrderId] = useState(null);
 
   useEffect(() => {
     fetchStats();
     fetchWashermen();
+    fetchOrders();
+
+    // ✅ Socket connection for real-time updates
+    const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace('/api', '');
+    socket = io(SOCKET_URL, {
+      transports: ['polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+    });
+
+    socket.on('connect', () => {
+      console.log('✅ Admin Socket connected');
+    });
+
+    // Listen for new orders
+    socket.on('newOrder', () => {
+      console.log('🔔 New order received, refreshing...');
+      fetchOrders();
+      fetchStats();
+    });
+
+    // Listen for order status updates
+    socket.on('orderStatusUpdated', () => {
+      console.log('🔔 Order status updated, refreshing...');
+      fetchOrders();
+      fetchStats();
+    });
+
+    return () => {
+      socket.off('newOrder');
+      socket.off('orderStatusUpdated');
+      socket.disconnect();
+    };
   }, []);
 
   const fetchStats = async () => {
-    try { const res = await api.get('/admin/stats'); setStats(res.data); } catch (e) { console.error(e); }
+    try { 
+      const res = await api.get('/admin/stats'); 
+      setStats(res.data); 
+    } catch (e) { 
+      console.error(e); 
+    }
   };
 
   const fetchWashermen = async () => {
     try { 
       const res = await api.get('/users'); 
       setWashermen(res.data.filter(u => u.role === 'Washerman')); 
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error(e); 
+    }
+  };
+
+  const fetchOrders = async () => {
+    try {
+      const res = await api.get('/orders/all');
+      setOrders(res.data);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleApproval = async (id, action) => {
@@ -39,8 +93,32 @@ export default function AdminDashboard() {
       setRejectingId(null);
       setRejectReason('');
       fetchWashermen();
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error(e); 
+    }
   };
+
+  const handleMarkComplete = async (orderId) => {
+    setUpdatingOrderId(orderId);
+    try {
+      await api.put('/orders/status', { 
+        orderId, 
+        status: 'Completed', 
+        progress: 100 
+      });
+      await fetchOrders();
+      await fetchStats();
+    } catch (e) {
+      alert(e.response?.data?.message || 'Failed to mark as complete');
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
+  // Filter active orders (not completed, not cancelled)
+  const activeOrders = orders.filter(o => 
+    o.status !== 'Completed' && o.status !== 'Cancelled'
+  );
 
   const revenueData = [
     { name: 'Jan', revenue: 4000 }, { name: 'Feb', revenue: 3000 }, { name: 'Mar', revenue: 5000 }, { name: 'Apr', revenue: 4500 }, { name: 'May', revenue: 6000 }, { name: 'Jun', revenue: 8000 }
@@ -118,6 +196,86 @@ export default function AdminDashboard() {
           </ResponsiveContainer>
         </motion.div>
       </div>
+
+      {/* ✅ NEW: Active Orders Section */}
+      <motion.div className="card-3d" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ padding: '1.5rem', marginBottom: '2.5rem' }}>
+        <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Package size={20} color="#FFD700" />
+          Active Orders ({activeOrders.length})
+        </h3>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="enterprise-table">
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Customer</th>
+                <th>Service</th>
+                <th>Washerman</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th style={{ textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeOrders.length === 0 && (
+                <tr>
+                  <td colSpan="7" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
+                    No active orders right now.
+                  </td>
+                </tr>
+              )}
+              {activeOrders.map((order) => (
+                <tr key={order._id}>
+                  <td style={{ fontWeight: 600 }}>#{order._id.slice(-6).toUpperCase()}</td>
+                  <td>{order.customer?.name || 'N/A'}</td>
+                  <td>{order.serviceType?.name || 'N/A'}</td>
+                  <td>{order.washerman?.name || 'Not Assigned'}</td>
+                  <td>
+                    <span className={`badge ${
+                      order.status === 'Completed' ? 'badge-completed' :
+                      order.status === 'Pending' ? 'badge-pending' : 'badge-active'
+                    }`}>
+                      {order.status}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <div style={{ width: '60px', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ 
+                          width: `${order.progress || 0}%`, 
+                          height: '100%', 
+                          background: 'linear-gradient(90deg, #FFD700, #FFA500)',
+                          borderRadius: '3px'
+                        }} />
+                      </div>
+                      <span style={{ fontSize: '0.85rem', color: '#FFD700' }}>{order.progress || 0}%</span>
+                    </div>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button
+                      onClick={() => handleMarkComplete(order._id)}
+                      disabled={updatingOrderId === order._id}
+                      className="premium-btn"
+                      style={{ 
+                        padding: '0.4rem 0.8rem', 
+                        fontSize: '0.8rem', 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '0.3rem',
+                        background: '#10b981',
+                        borderColor: '#10b981'
+                      }}
+                    >
+                      <CheckCircle2 size={14} />
+                      {updatingOrderId === order._id ? 'Completing...' : 'Mark Complete'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </motion.div>
 
       {/* Enterprise Washerman Approval Table */}
       <motion.div className="card-3d" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ padding: '1.5rem' }}>

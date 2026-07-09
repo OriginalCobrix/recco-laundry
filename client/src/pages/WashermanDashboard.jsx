@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState, useContext, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import DashboardLayout from '../components/DashboardLayout';
@@ -7,9 +7,7 @@ import {
   Package, CheckCircle, Clock, MapPin, Phone, 
   User, TrendingUp, Inbox, PlayCircle, CheckCircle2 
 } from 'lucide-react';
-import io from 'socket.io-client';
-
-let socket;
+import { io } from 'socket.io-client';
 
 const STATUS_OPTIONS = [
   'Accepted', 'Picked Up', 'Sorting', 'Washing', 
@@ -35,8 +33,10 @@ export default function WashermanDashboard() {
   const [orders, setOrders] = useState([]);
   const [tab, setTab] = useState('incoming');
   const [updatingId, setUpdatingId] = useState(null);
+  
+  // ✅ FIX: useRef se socket ko stable rakhein
+  const socketRef = useRef(null);
 
-  // ✅ DEBUG: Component mount check
   useEffect(() => {
     console.log('🔍 WashermanDashboard component mounted');
     console.log('🔍 User:', user);
@@ -44,31 +44,38 @@ export default function WashermanDashboard() {
   }, []);
 
   useEffect(() => {
+    if (!user?._id) {
+      console.warn('⚠️ User not available, skipping socket connection');
+      return;
+    }
+
     console.log('🔍 Socket useEffect triggered');
     
-    const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace('/api', '');
+    const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace('/api', '');
     console.log('🔍 Socket URL:', SOCKET_URL);
     
-    // ✅ FIX: Sirf polling transport
-    socket = io(SOCKET_URL, {
-      transports: ['polling'],
-      reconnection: true,
-      reconnectionDelay: 1000,
-      timeout: 20000
-    });
-
-    console.log('🔍 Socket instance created:', socket);
-
-    if (user?._id) {
-      console.log('🔍 Emitting join event for user:', user._id);
-      socket.emit('join', user._id);
-    } else {
-      console.warn('⚠️ User ID not available, cannot join room');
+    // ✅ FIX: Socket ko useRef mein store karein
+    if (!socketRef.current) {
+      socketRef.current = io(SOCKET_URL, {
+        transports: ['polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        timeout: 20000
+      });
+      console.log('🔍 Socket instance created:', socketRef.current);
     }
+
+    const socket = socketRef.current;
+
+    // Join room
+    console.log('🔍 Emitting join event for user:', user._id);
+    socket.emit('join', user._id);
 
     socket.on('connect', () => {
       console.log('✅ Socket connected successfully via polling');
       console.log('✅ Socket ID:', socket.id);
+      // Re-join room after reconnection
+      socket.emit('join', user._id);
     });
 
     socket.on('newOrder', (newOrder) => {
@@ -76,7 +83,10 @@ export default function WashermanDashboard() {
       fetchOrders();
     });
 
-    socket.on('orderStatusUpdated', () => fetchOrders());
+    socket.on('orderStatusUpdated', () => {
+      console.log('🔔 Order status updated, refreshing...');
+      fetchOrders();
+    });
 
     socket.on('connect_error', (error) => {
       console.error('❌ Socket connection error:', error);
@@ -87,13 +97,20 @@ export default function WashermanDashboard() {
       console.log('⚠️ Socket disconnected');
     });
 
+    // Initial fetch
+    fetchOrders();
+
+    // ✅ FIX: Cleanup sirf component unmount par ho
     return () => {
       console.log('🔍 Cleaning up socket connection');
       socket.off('newOrder');
       socket.off('orderStatusUpdated');
-      socket.disconnect();
+      socket.off('connect');
+      socket.off('connect_error');
+      socket.off('disconnect');
+      // Socket disconnect mat karein, sirf listeners remove karein
     };
-  }, [user?._id]);
+  }, [user?._id]); // ✅ FIX: Sirf user._id par depend kare
 
   const fetchOrders = async () => {
     try {

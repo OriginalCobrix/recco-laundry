@@ -16,8 +16,8 @@ const io = new Server(server, {
     origin: "*", 
     methods: ['GET', 'POST', 'PUT', 'DELETE']
   },
-  transports: ['polling'], // ✅ Sirf polling, websocket hata diya
-  allowEIO3: true, // ✅ Important for compatibility
+  transports: ['polling'],
+  allowEIO3: true,
   pingTimeout: 60000,
   pingInterval: 25000
 });
@@ -25,15 +25,18 @@ const io = new Server(server, {
 global.io = io;
 
 io.on('connection', (socket) => {
-  logger.info(`Socket connected: ${socket.id}`);
+  logger.info(`✅ Socket connected: ${socket.id}`);
+  logger.info(`📊 Total connected clients: ${io.engine.clientsCount}`);
   
   socket.on('join', (userId) => {
     socket.join(userId);
-    logger.info(`User joined room: ${userId}`);
+    logger.info(`✅ User ${userId} joined room`);
+    logger.info(`📊 Room members for ${userId}: ${io.sockets.adapter.rooms.get(userId)?.size || 0}`);
   });
 
   socket.on('disconnect', () => {
-    logger.info(`Socket disconnected: ${socket.id}`);
+    logger.info(`❌ Socket disconnected: ${socket.id}`);
+    logger.info(`📊 Total connected clients after disconnect: ${io.engine.clientsCount}`);
   });
 });
 

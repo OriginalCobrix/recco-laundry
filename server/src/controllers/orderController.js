@@ -3,6 +3,7 @@ const Service = require('../models/Service');
 const User = require('../models/User');
 const { createNotification } = require('../utils/notificationService');
 const { sendEmail } = require('../utils/emailService');
+const logger = require('../utils/logger');
 
 exports.placeOrder = async (req, res) => {
   try {
@@ -16,22 +17,45 @@ exports.placeOrder = async (req, res) => {
       statusHistory: [{ status: 'Pending', updatedBy: req.user._id }]
     });
 
+    logger.info(`📦 New order created: ${order._id}`);
+
     const activeWashermen = await User.find({ role: 'Washerman', approvalStatus: 'Active' });
+    
+    logger.info(`👥 Active washermen found: ${activeWashermen.length}`);
+    
+    if (activeWashermen.length === 0) {
+      logger.warn('⚠️ No active washermen found! Orders will not be notified.');
+    }
     
     activeWashermen.forEach(async (wm) => {
       // 1. Database Notification
       await createNotification(wm._id, `New Order Available: #${order._id.toString().slice(-6)}`, 'Order', order._id);
       
-      // 2. FIX: Real-time Socket Emit to Washerman's Room
-      // global.io server.js se aaya hai. Har washerman apne userId ke room mein join hota hai.
+      // 2. ✅ DEBUG: Socket Emit with logging
       if (global.io) {
+        logger.info(`🔌 Emitting newOrder to washerman: ${wm._id}`);
+        logger.info(`🔌 Total connected sockets: ${global.io.engine.clientsCount}`);
+        
+        // Check if washerman's room exists
+        const room = global.io.sockets.adapter.rooms.get(wm._id.toString());
+        if (room) {
+          logger.info(`✅ Room exists for washerman ${wm._id} with ${room.size} members`);
+        } else {
+          logger.warn(`⚠️ No room found for washerman ${wm._id} - they may not be connected`);
+        }
+        
         global.io.to(wm._id.toString()).emit('newOrder', order);
+        
+        logger.info(`✅ Socket emit completed for washerman: ${wm._id}`);
+      } else {
+        logger.error('❌ global.io is not available!');
       }
     });
 
     await sendEmail(req.user.email, 'RECCO - Order Placed', `<h3>Order Placed Successfully</h3><p>Your order ID is ${order._id}.</p>`);
     res.status(201).json(order);
   } catch (error) {
+    logger.error('❌ Error in placeOrder:', error);
     res.status(500).json({ message: error.message });
   }
 };
