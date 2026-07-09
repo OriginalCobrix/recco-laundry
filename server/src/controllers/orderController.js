@@ -17,8 +17,16 @@ exports.placeOrder = async (req, res) => {
     });
 
     const activeWashermen = await User.find({ role: 'Washerman', approvalStatus: 'Active' });
+    
     activeWashermen.forEach(async (wm) => {
+      // 1. Database Notification
       await createNotification(wm._id, `New Order Available: #${order._id.toString().slice(-6)}`, 'Order', order._id);
+      
+      // 2. FIX: Real-time Socket Emit to Washerman's Room
+      // global.io server.js se aaya hai. Har washerman apne userId ke room mein join hota hai.
+      if (global.io) {
+        global.io.to(wm._id.toString()).emit('newOrder', order);
+      }
     });
 
     await sendEmail(req.user.email, 'RECCO - Order Placed', `<h3>Order Placed Successfully</h3><p>Your order ID is ${order._id}.</p>`);
@@ -73,6 +81,12 @@ exports.acceptOrder = async (req, res) => {
     await order.save();
 
     await createNotification(order.customer, `Your order #${order._id.toString().slice(-6)} has been accepted by a washerman.`, 'Order', order._id);
+    
+    // Emit socket event to customer as well
+    if (global.io) {
+      global.io.to(order.customer.toString()).emit('orderAccepted', order);
+    }
+
     const customer = await User.findById(order.customer);
     if (customer) await sendEmail(customer.email, 'RECCO - Order Accepted', `<p>Your order has been accepted and is now being processed.</p>`);
 
@@ -106,6 +120,12 @@ exports.updateOrderStatus = async (req, res) => {
 
     await order.save();
     await createNotification(order.customer, `Your order #${order._id.toString().slice(-6)} is now: ${order.status} (${order.progress}%)`, 'Order', order._id);
+    
+    // Emit socket event to customer for real-time progress
+    if (global.io) {
+      global.io.to(order.customer.toString()).emit('orderStatusUpdated', order);
+    }
+
     const customer = await User.findById(order.customer);
     if (customer) await sendEmail(customer.email, 'RECCO - Order Update', `<p>Your order status is now: <strong>${order.status}</strong> — Progress: ${order.progress}%</p>`);
 

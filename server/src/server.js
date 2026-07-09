@@ -12,8 +12,11 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL,
-    methods: ['GET', 'POST', 'PUT', 'DELETE']
+    // origin: true automatically frontend ki domain ko allow kar leta hai
+    // Railway par CLIENT_URL set karne ki zaroorat nahi, ya phir usay remove kar dein
+    origin: true, 
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
   }
 });
 

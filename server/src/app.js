@@ -11,18 +11,19 @@ const orderRoutes = require('./routes/orderRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const serviceRoutes = require('./routes/serviceRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
-const contactRoutes = require('./routes/contactRoutes'); // <-- Naya Route Import
+const contactRoutes = require('./routes/contactRoutes'); 
 const errorMiddleware = require('./middlewares/errorMiddleware');
 const sanitizeMiddleware = require('./middlewares/sanitizeMiddleware');
 
 const app = express();
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
+// FIX: origin ko 'true' kar dein taake Vercel ki domain automatically allow ho jaye
+app.use(cors({ origin: true, credentials: true })); 
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100
+  max: 1000 // Thora increase kar dein kyunke sockets bhi count hote hain
 });
 app.use('/api', limiter);
 
@@ -43,7 +44,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/payments', paymentRoutes);
-app.use('/api/contact', contactRoutes); // <-- Naya Route Register
+app.use('/api/contact', contactRoutes);
 
 app.use(errorMiddleware);
 

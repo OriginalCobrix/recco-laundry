@@ -36,13 +36,39 @@ export default function WashermanDashboard() {
   const [tab, setTab] = useState('incoming'); // incoming | active | completed
   const [updatingId, setUpdatingId] = useState(null);
 
-    useEffect(() => {
-    const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-    socket = io(SOCKET_URL);
-    socket.emit('join', user._id);
-    socket.on('new_notification', () => fetchOrders());
-    return () => socket.disconnect();
-  }, [user]);
+  useEffect(() => {
+    // FIX 1: Remove '/api' from the URL because Socket.IO connects to the root domain
+    const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace('/api', '');
+    
+    // FIX 2: Add transports and credentials for stable Railway/Vercel connection
+    socket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+      withCredentials: true
+    });
+
+    if (user?._id) {
+      socket.emit('join', user._id);
+    }
+
+    // FIX 3: Listen to 'newOrder' event (matches the backend emit event)
+    socket.on('newOrder', (newOrder) => {
+      console.log('🔔 New Order Received via Socket:', newOrder);
+      fetchOrders(); // Refresh the order list immediately
+      
+      // Optional: Play a sound or show a browser notification here
+      // new Audio('/notification.mp3').play(); 
+    });
+
+    // Listen to status updates as well
+    socket.on('orderStatusUpdated', () => fetchOrders());
+
+    // Cleanup on unmount
+    return () => {
+      socket.off('newOrder');
+      socket.off('orderStatusUpdated');
+      socket.disconnect();
+    };
+  }, [user?._id]); // Added user?._id as dependency to prevent infinite re-renders
 
   const fetchOrders = async () => {
     try {
