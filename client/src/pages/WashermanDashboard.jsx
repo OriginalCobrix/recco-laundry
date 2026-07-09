@@ -36,23 +36,39 @@ export default function WashermanDashboard() {
   const [tab, setTab] = useState('incoming');
   const [updatingId, setUpdatingId] = useState(null);
 
+  // ✅ DEBUG: Component mount check
   useEffect(() => {
-    const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace('/api', '');
+    console.log('🔍 WashermanDashboard component mounted');
+    console.log('🔍 User:', user);
+    console.log('🔍 VITE_API_URL:', import.meta.env.VITE_API_URL);
+  }, []);
+
+  useEffect(() => {
+    console.log('🔍 Socket useEffect triggered');
     
-    // ✅ FIX: Sirf polling transport, websocket ko completely remove kiya
+    const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace('/api', '');
+    console.log('🔍 Socket URL:', SOCKET_URL);
+    
+    // ✅ FIX: Sirf polling transport
     socket = io(SOCKET_URL, {
-      transports: ['polling'], // ✅ Sirf polling
+      transports: ['polling'],
       reconnection: true,
       reconnectionDelay: 1000,
       timeout: 20000
     });
 
+    console.log('🔍 Socket instance created:', socket);
+
     if (user?._id) {
+      console.log('🔍 Emitting join event for user:', user._id);
       socket.emit('join', user._id);
+    } else {
+      console.warn('⚠️ User ID not available, cannot join room');
     }
 
     socket.on('connect', () => {
       console.log('✅ Socket connected successfully via polling');
+      console.log('✅ Socket ID:', socket.id);
     });
 
     socket.on('newOrder', (newOrder) => {
@@ -64,9 +80,15 @@ export default function WashermanDashboard() {
 
     socket.on('connect_error', (error) => {
       console.error('❌ Socket connection error:', error);
+      console.error('❌ Error details:', error.message);
+    });
+
+    socket.on('disconnect', () => {
+      console.log('⚠️ Socket disconnected');
     });
 
     return () => {
+      console.log('🔍 Cleaning up socket connection');
       socket.off('newOrder');
       socket.off('orderStatusUpdated');
       socket.disconnect();
@@ -75,9 +97,13 @@ export default function WashermanDashboard() {
 
   const fetchOrders = async () => {
     try {
+      console.log('🔍 Fetching orders...');
       const res = await api.get('/orders/my-orders');
+      console.log('✅ Orders fetched:', res.data.length);
       setOrders(res.data);
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error('❌ Error fetching orders:', e);
+    }
   };
 
   const incoming = orders.filter(o => o.status === 'Pending' && !o.washerman);
