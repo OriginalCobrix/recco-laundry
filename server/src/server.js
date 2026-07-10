@@ -37,6 +37,15 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
-  logger.info(`🚀 RECCO Server running on port ${PORT}`);
-});
+
+// ✅ Vercel compatibility
+if (process.env.NODE_ENV !== 'production') {
+  server.listen(PORT, () => {
+    logger.info(`🚀 RECO Server running on port ${PORT}`);
+  });
+}
+
+// ✅ Export for Vercel serverless
+module.exports = (req, res) => {
+  server.emit('request', req, res);
+};
