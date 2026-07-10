@@ -110,13 +110,7 @@ export default function Login() {
                   )}
                   <PremiumInput icon={Mail} type="email" placeholder="Email Address" name="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} isFocused={focusedField === 'email'} setIsFocused={(v) => setFocusedField(v ? 'email' : null)} />
                   <PremiumInput icon={Lock} type={showPassword ? 'text' : 'password'} placeholder="Password" name="password" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} isFocused={focusedField === 'password'} setIsFocused={(v) => setFocusedField(v ? 'password' : null)} rightIcon={{ visible: showPassword, onClick: () => setShowPassword(!showPassword) }} />
-                  {!isLogin && (
-                    <div style={{ display: 'flex', gap: '0.8rem', marginBottom: '1.2rem' }}>
-                      {['Customer', 'Washerman'].map((role) => (
-                        <div key={role} onClick={() => setFormData({...formData, role})} style={{ flex: 1, padding: '0.9rem', textAlign: 'center', borderRadius: '12px', cursor: 'pointer', background: formData.role === role ? 'rgba(255, 215, 0, 0.08)' : 'rgba(255,255,255,0.02)', border: `1px solid ${formData.role === role ? 'rgba(255, 215, 0, 0.5)' : 'rgba(255,255,255,0.08)'}`, color: formData.role === role ? '#FFD700' : '#666', fontWeight: '600', transition: 'all 0.3s ease', fontSize: '0.85rem' }}>{role}</div>
-                      ))}
-                    </div>
-                  )}
+                  
                   {isLogin && <div style={{ textAlign: 'right', margin: '0 0 1.5rem 0' }}><span style={{ color: '#FFD700', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 500 }}>Forgot password?</span></div>}
                   <motion.button type="submit" disabled={loading} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} style={{ width: '100%', height: '56px', background: loading ? '#222' : 'linear-gradient(135deg, #FFD700, #FFA500)', color: '#000', border: 'none', borderRadius: '12px', fontWeight: '700', fontSize: '1.05rem', cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', boxShadow: '0 10px 25px rgba(255, 215, 0, 0.2)', transition: 'all 0.3s ease', margin: '0 0 1.5rem 0' }}>
                     {loading ? 'Processing...' : (isLogin ? 'Login to Dashboard' : 'Create Account')}{!loading && <ArrowRight size={20} />}

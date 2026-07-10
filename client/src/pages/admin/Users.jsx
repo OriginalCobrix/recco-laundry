@@ -25,7 +25,7 @@ export default function AdminUsers() {
       </motion.div>
 
       <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
-        {['All', 'Customer', 'Washerman', 'Admin'].map(f => (
+        {['All', 'Customer',  'Admin'].map(f => (
           <button key={f} onClick={() => setFilter(f)} className={filter === f ? 'premium-btn' : 'premium-btn-outline'} style={{ padding: '0.6rem 1.2rem', fontSize: '0.9rem' }}>
             {f}
           </button>

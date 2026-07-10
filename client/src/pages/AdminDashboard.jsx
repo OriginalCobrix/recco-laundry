@@ -1,50 +1,80 @@
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState, useContext, useRef } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import DashboardLayout from '../components/DashboardLayout';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
-import { Users, ShoppingBag, DollarSign, Clock, CheckCircle, XCircle, Package, CheckCircle2 } from 'lucide-react';
-import io from 'socket.io-client';
+import { Users, ShoppingBag, DollarSign, Clock, CheckCircle, Package, CheckCircle2, CreditCard, TrendingUp } from 'lucide-react';
+import { io } from 'socket.io-client';
 
-let socket;
+const STATUS_OPTIONS = [
+  'Pending', 'Accepted', 'Picked Up', 'Sorting', 'Washing', 
+  'Drying', 'Ironing', 'Packaging', 'Quality Check', 
+  'Ready For Pickup', 'Completed', 'Cancelled'
+];
+
+const STATUS_PROGRESS = {
+  'Pending': 0,
+  'Accepted': 10,
+  'Picked Up': 20,
+  'Sorting': 30,
+  'Washing': 45,
+  'Drying': 55,
+  'Ironing': 70,
+  'Packaging': 80,
+  'Quality Check': 90,
+  'Ready For Pickup': 95,
+  'Completed': 100,
+  'Cancelled': 0
+};
 
 export default function AdminDashboard() {
   const { user } = useContext(AuthContext);
   const [stats, setStats] = useState({});
-  const [washermen, setWashermen] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [rejectingId, setRejectingId] = useState(null);
-  const [rejectReason, setRejectReason] = useState('');
+  const [customers, setCustomers] = useState([]);
+  const [activeTab, setActiveTab] = useState('orders');
   const [updatingOrderId, setUpdatingOrderId] = useState(null);
+  const [paymentModal, setPaymentModal] = useState(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [paymentNote, setPaymentNote] = useState('');
+  const socketRef = useRef(null);
 
   useEffect(() => {
     fetchStats();
-    fetchWashermen();
+    fetchCustomers();
     fetchOrders();
 
-    // ✅ Socket connection for real-time updates
-    const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace('/api', '');
-    socket = io(SOCKET_URL, {
-      transports: ['polling'],
-      reconnection: true,
-      reconnectionDelay: 1000,
-    });
+    const SOCKET_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace('/api', '');
+    
+    if (!socketRef.current) {
+      socketRef.current = io(SOCKET_URL, {
+        transports: ['polling'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+      });
+    }
+
+    const socket = socketRef.current;
 
     socket.on('connect', () => {
       console.log('✅ Admin Socket connected');
+      if (user?._id) socket.emit('join', user._id);
     });
 
-    // Listen for new orders
     socket.on('newOrder', () => {
-      console.log('🔔 New order received, refreshing...');
+      console.log('🔔 New order received');
       fetchOrders();
       fetchStats();
     });
 
-    // Listen for order status updates
     socket.on('orderStatusUpdated', () => {
-      console.log('🔔 Order status updated, refreshing...');
+      fetchOrders();
+      fetchStats();
+    });
+
+    socket.on('paymentUpdated', () => {
       fetchOrders();
       fetchStats();
     });
@@ -52,7 +82,7 @@ export default function AdminDashboard() {
     return () => {
       socket.off('newOrder');
       socket.off('orderStatusUpdated');
-      socket.disconnect();
+      socket.off('paymentUpdated');
     };
   }, []);
 
@@ -60,88 +90,107 @@ export default function AdminDashboard() {
     try { 
       const res = await api.get('/admin/stats'); 
       setStats(res.data); 
-    } catch (e) { 
-      console.error(e); 
-    }
+    } catch (e) { console.error(e); }
   };
 
-  const fetchWashermen = async () => {
+  const fetchCustomers = async () => {
     try { 
       const res = await api.get('/users'); 
-      setWashermen(res.data.filter(u => u.role === 'Washerman')); 
-    } catch (e) { 
-      console.error(e); 
-    }
+      setCustomers(res.data.filter(u => u.role === 'Customer')); 
+    } catch (e) { console.error(e); }
   };
 
   const fetchOrders = async () => {
     try {
       const res = await api.get('/orders/all');
       setOrders(res.data);
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
   };
 
-  const handleApproval = async (id, action) => {
-    try {
-      const payload = { washermanId: id, action };
-      if (action === 'Reject' && rejectingId === id) {
-        payload.rejectionReason = rejectReason;
-      }
-      await api.put('/admin/washerman-approval', payload);
-      setRejectingId(null);
-      setRejectReason('');
-      fetchWashermen();
-    } catch (e) { 
-      console.error(e); 
-    }
-  };
-
-  const handleMarkComplete = async (orderId) => {
+  const handleAssignOrder = async (orderId) => {
     setUpdatingOrderId(orderId);
     try {
-      await api.put('/orders/status', { 
-        orderId, 
-        status: 'Completed', 
-        progress: 100 
-      });
+      await api.put('/orders/assign', { orderId });
       await fetchOrders();
       await fetchStats();
     } catch (e) {
-      alert(e.response?.data?.message || 'Failed to mark as complete');
+      alert(e.response?.data?.message || 'Failed to assign order');
     } finally {
       setUpdatingOrderId(null);
     }
   };
 
-  // Filter active orders (not completed, not cancelled)
-  const activeOrders = orders.filter(o => 
-    o.status !== 'Completed' && o.status !== 'Cancelled'
-  );
+  const handleStatusUpdate = async (orderId, status) => {
+    setUpdatingOrderId(orderId);
+    try {
+      const progress = STATUS_PROGRESS[status] ?? 50;
+      await api.put('/orders/status', { orderId, status, progress });
+      await fetchOrders();
+      await fetchStats();
+    } catch (e) {
+      alert(e.response?.data?.message || 'Failed to update status');
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
+  const handlePaymentUpdate = async () => {
+    if (!paymentAmount || parseFloat(paymentAmount) <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+
+    try {
+      await api.put('/orders/payment', {
+        orderId: paymentModal._id,
+        amount: parseFloat(paymentAmount),
+        method: paymentMethod,
+        note: paymentNote
+      });
+      
+      setPaymentModal(null);
+      setPaymentAmount('');
+      setPaymentMethod('Cash');
+      setPaymentNote('');
+      await fetchOrders();
+      await fetchStats();
+    } catch (e) {
+      alert(e.response?.data?.message || 'Failed to update payment');
+    }
+  };
+
+  const pendingOrders = orders.filter(o => o.status === 'Pending');
+  const activeOrders = orders.filter(o => o.status !== 'Pending' && o.status !== 'Completed' && o.status !== 'Cancelled');
+  const completedOrders = orders.filter(o => o.status === 'Completed');
+
+  const totalRevenue = orders.reduce((sum, o) => sum + (o.paidAmount || 0), 0);
+  const totalPendingPayments = orders.reduce((sum, o) => sum + ((o.price || 0) - (o.paidAmount || 0)), 0);
 
   const revenueData = [
-    { name: 'Jan', revenue: 4000 }, { name: 'Feb', revenue: 3000 }, { name: 'Mar', revenue: 5000 }, { name: 'Apr', revenue: 4500 }, { name: 'May', revenue: 6000 }, { name: 'Jun', revenue: 8000 }
+    { name: 'Jan', revenue: 4000 }, { name: 'Feb', revenue: 3000 }, 
+    { name: 'Mar', revenue: 5000 }, { name: 'Apr', revenue: 4500 }, 
+    { name: 'May', revenue: 6000 }, { name: 'Jun', revenue: 8000 }
   ];
+  
   const orderPieData = [
-    { name: 'Active', value: stats.activeOrders || 0 },
-    { name: 'Completed', value: stats.completedOrders || 0 },
-    { name: 'Pending', value: stats.todayOrders || 0 }
+    { name: 'Active', value: activeOrders.length },
+    { name: 'Completed', value: completedOrders.length },
+    { name: 'Pending', value: pendingOrders.length }
   ];
   const PIE_COLORS = ['#FFD700', '#10b981', '#f59e0b'];
 
   const statCards = [
-    { title: 'Total Revenue', value: `$${stats.totalRevenue || 0}`, icon: DollarSign, color: '#10b981' },
-    { title: 'Total Orders', value: (stats.todayOrders || 0) + (stats.activeOrders || 0) + (stats.completedOrders || 0), icon: ShoppingBag, color: '#FFD700' },
-    { title: 'Total Customers', value: stats.totalCustomers || 0, icon: Users, color: '#3b82f6' },
-    { title: 'Pending Washermen', value: stats.pendingWashermen || 0, icon: Clock, color: '#ef4444' }
+    { title: 'Total Revenue', value: `Rs. ${totalRevenue.toLocaleString()}`, icon: DollarSign, color: '#10b981' },
+    { title: 'Total Orders', value: orders.length, icon: ShoppingBag, color: '#FFD700' },
+    { title: 'Total Customers', value: customers.length, icon: Users, color: '#3b82f6' },
+    { title: 'Pending Payments', value: `Rs. ${totalPendingPayments.toLocaleString()}`, icon: CreditCard, color: '#ef4444' }
   ];
 
   return (
     <DashboardLayout>
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: '2.5rem' }}>
         <h1 style={{ fontSize: '2.5rem' }}>Admin <span className="gradient-text">Control Center</span></h1>
-        <p style={{ color: 'var(--text-muted)' }}>Monitor metrics, manage users, and oversee operations.</p>
+        <p style={{ color: 'var(--text-muted)' }}>Manage orders, track progress, and handle payments.</p>
       </motion.div>
 
       {/* Stat Cards */}
@@ -151,7 +200,7 @@ export default function AdminDashboard() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{stat.title}</p>
-                <h3 style={{ fontSize: '2rem' }}>{stat.value}</h3>
+                <h3 style={{ fontSize: '1.8rem' }}>{stat.value}</h3>
               </div>
               <div style={{ background: `${stat.color}15`, padding: '0.6rem', borderRadius: '10px' }}>
                 <stat.icon size={20} color={stat.color} />
@@ -197,12 +246,38 @@ export default function AdminDashboard() {
         </motion.div>
       </div>
 
-      {/* ✅ NEW: Active Orders Section */}
-      <motion.div className="card-3d" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ padding: '1.5rem', marginBottom: '2.5rem' }}>
-        <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Package size={20} color="#FFD700" />
-          Active Orders ({activeOrders.length})
-        </h3>
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+        {[
+          { id: 'orders', label: 'All Orders', count: orders.length, icon: Package },
+          { id: 'pending', label: 'Pending', count: pendingOrders.length, icon: Clock },
+          { id: 'active', label: 'Active', count: activeOrders.length, icon: TrendingUp },
+          { id: 'completed', label: 'Completed', count: completedOrders.length, icon: CheckCircle }
+        ].map(t => (
+          <button
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            className={activeTab === t.id ? 'premium-btn' : 'premium-btn-outline'}
+            style={{ padding: '0.7rem 1.2rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+          >
+            <t.icon size={16} />
+            {t.label}
+            <span style={{
+              background: activeTab === t.id ? 'rgba(0,0,0,0.2)' : 'rgba(255,215,0,0.15)',
+              color: activeTab === t.id ? '#000' : '#FFD700',
+              borderRadius: '20px',
+              padding: '0.1rem 0.5rem',
+              fontSize: '0.75rem',
+              fontWeight: 700
+            }}>
+              {t.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Orders Table */}
+      <motion.div className="card-3d" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ padding: '1.5rem' }}>
         <div style={{ overflowX: 'auto' }}>
           <table className="enterprise-table">
             <thead>
@@ -210,30 +285,52 @@ export default function AdminDashboard() {
                 <th>Order ID</th>
                 <th>Customer</th>
                 <th>Service</th>
-                <th>Washerman</th>
+                <th>Price</th>
+                <th>Paid</th>
+                <th>Payment Status</th>
                 <th>Status</th>
                 <th>Progress</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {activeOrders.length === 0 && (
+              {orders.length === 0 && (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
-                    No active orders right now.
+                  <td colSpan="9" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
+                    No orders yet.
                   </td>
                 </tr>
               )}
-              {activeOrders.map((order) => (
+              {orders
+                .filter(o => {
+                  if (activeTab === 'pending') return o.status === 'Pending';
+                  if (activeTab === 'active') return o.status !== 'Pending' && o.status !== 'Completed' && o.status !== 'Cancelled';
+                  if (activeTab === 'completed') return o.status === 'Completed';
+                  return true;
+                })
+                .map((order) => (
                 <tr key={order._id}>
                   <td style={{ fontWeight: 600 }}>#{order._id.slice(-6).toUpperCase()}</td>
-                  <td>{order.customer?.name || 'N/A'}</td>
+                  <td>
+                    <div>{order.customer?.name || 'N/A'}</div>
+                    <div style={{ fontSize: '0.75rem', color: '#888' }}>{order.customer?.phone}</div>
+                  </td>
                   <td>{order.serviceType?.name || 'N/A'}</td>
-                  <td>{order.washerman?.name || 'Not Assigned'}</td>
+                  <td style={{ color: '#FFD700', fontWeight: 600 }}>Rs. {order.price || 0}</td>
+                  <td style={{ color: '#10b981', fontWeight: 600 }}>Rs. {order.paidAmount || 0}</td>
+                  <td>
+                    <span className={`badge ${
+                      order.paymentStatus === 'Paid' ? 'badge-completed' :
+                      order.paymentStatus === 'Partial' ? 'badge-active' : 'badge-pending'
+                    }`}>
+                      {order.paymentStatus || 'Unpaid'}
+                    </span>
+                  </td>
                   <td>
                     <span className={`badge ${
                       order.status === 'Completed' ? 'badge-completed' :
-                      order.status === 'Pending' ? 'badge-pending' : 'badge-active'
+                      order.status === 'Pending' ? 'badge-pending' : 
+                      order.status === 'Cancelled' ? 'badge-rejected' : 'badge-active'
                     }`}>
                       {order.status}
                     </span>
@@ -252,23 +349,42 @@ export default function AdminDashboard() {
                     </div>
                   </td>
                   <td style={{ textAlign: 'right' }}>
-                    <button
-                      onClick={() => handleMarkComplete(order._id)}
-                      disabled={updatingOrderId === order._id}
-                      className="premium-btn"
-                      style={{ 
-                        padding: '0.4rem 0.8rem', 
-                        fontSize: '0.8rem', 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
-                        gap: '0.3rem',
-                        background: '#10b981',
-                        borderColor: '#10b981'
-                      }}
-                    >
-                      <CheckCircle2 size={14} />
-                      {updatingOrderId === order._id ? 'Completing...' : 'Mark Complete'}
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      {order.status === 'Pending' && (
+                        <button
+                          onClick={() => handleAssignOrder(order._id)}
+                          disabled={updatingOrderId === order._id}
+                          className="premium-btn"
+                          style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }}
+                        >
+                          {updatingOrderId === order._id ? '...' : 'Accept'}
+                        </button>
+                      )}
+
+                      {order.status !== 'Pending' && order.status !== 'Completed' && order.status !== 'Cancelled' && (
+                        <select
+                          value={order.status}
+                          disabled={updatingOrderId === order._id}
+                          onChange={(e) => handleStatusUpdate(order._id, e.target.value)}
+                          className="premium-input"
+                          style={{ padding: '0.3rem', fontSize: '0.75rem', height: 'auto', width: 'auto' }}
+                        >
+                          {STATUS_OPTIONS.map(s => (
+                            <option key={s} value={s} style={{ background: '#111' }}>{s}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {order.paymentStatus !== 'Paid' && (
+                        <button
+                          onClick={() => setPaymentModal(order)}
+                          className="premium-btn-outline"
+                          style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', borderColor: '#10b981', color: '#10b981' }}
+                        >
+                          <CreditCard size={12} /> Payment
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -277,76 +393,125 @@ export default function AdminDashboard() {
         </div>
       </motion.div>
 
-      {/* Enterprise Washerman Approval Table */}
-      <motion.div className="card-3d" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ padding: '1.5rem' }}>
-        <h3 style={{ marginBottom: '1.5rem' }}>Washerman Approvals & Management</h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="enterprise-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th>Status</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {washermen.length === 0 && (
-                <tr>
-                  <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>No Washermen registered yet.</td>
-                </tr>
-              )}
-              {washermen.map((w) => (
-                <tr key={w._id}>
-                  <td style={{ fontWeight: 600 }}>{w.name}</td>
-                  <td>{w.email}</td>
-                  <td>{w.phone}</td>
-                  <td>
-                    <span className={`badge ${w.approvalStatus === 'Active' ? 'badge-active' : w.approvalStatus === 'Rejected' ? 'badge-rejected' : 'badge-pending'}`}>
-                      {w.approvalStatus}
-                    </span>
-                    {w.approvalStatus === 'Rejected' && w.rejectionReason && (
-                      <span style={{ display: 'block', fontSize: '0.7rem', color: '#666', marginTop: '0.3rem' }}>Reason: {w.rejectionReason}</span>
-                    )}
-                  </td>
-                  <td style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
-                    {w.approvalStatus === 'Pending Approval' && (
-                      <>
-                        <button onClick={() => handleApproval(w._id, 'Approve')} className="premium-btn" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                          <CheckCircle size={14} /> Approve
-                        </button>
-                        {rejectingId === w._id ? (
-                          <div style={{ display: 'flex', gap: '0.3rem' }}>
-                            <input 
-                              type="text" 
-                              placeholder="Reason..." 
-                              value={rejectReason} 
-                              onChange={(e) => setRejectReason(e.target.value)} 
-                              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '0.4rem', color: '#fff', width: '120px' }}
-                            />
-                            <button onClick={() => handleApproval(w._id, 'Reject')} className="premium-btn-outline" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: '#ef4444', borderColor: '#ef4444' }}>Save</button>
-                          </div>
-                        ) : (
-                          <button onClick={() => setRejectingId(w._id)} className="premium-btn-outline" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: '#ef4444', borderColor: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                            <XCircle size={14} /> Reject
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </motion.div>
+      {/* Payment Modal */}
+      <AnimatePresence>
+        {paymentModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              padding: '1rem'
+            }}
+            onClick={() => setPaymentModal(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="card-3d"
+              style={{ padding: '2rem', maxWidth: '500px', width: '100%' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <CreditCard size={20} color="#FFD700" />
+                Record Payment
+              </h3>
+              
+              <div style={{ background: 'rgba(255,215,0,0.05)', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <span style={{ color: '#888' }}>Order #{paymentModal._id.slice(-6).toUpperCase()}</span>
+                  <span style={{ color: '#FFD700', fontWeight: 600 }}>Rs. {paymentModal.price}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <span style={{ color: '#888' }}>Already Paid</span>
+                  <span style={{ color: '#10b981', fontWeight: 600 }}>Rs. {paymentModal.paidAmount || 0}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.5rem' }}>
+                  <span style={{ color: '#888' }}>Remaining</span>
+                  <span style={{ color: '#ef4444', fontWeight: 700 }}>Rs. {(paymentModal.price - (paymentModal.paidAmount || 0)).toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.85rem', color: '#888', display: 'block', marginBottom: '0.3rem' }}>Amount (Rs.)</label>
+                  <input
+                    type="number"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    placeholder="Enter amount"
+                    className="premium-input"
+                    style={{ width: '100%' }}
+                    max={paymentModal.price - (paymentModal.paidAmount || 0)}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.85rem', color: '#888', display: 'block', marginBottom: '0.3rem' }}>Payment Method</label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="premium-input"
+                    style={{ width: '100%' }}
+                  >
+                    <option value="Cash" style={{ background: '#111' }}>Cash</option>
+                    <option value="Bank Transfer" style={{ background: '#111' }}>Bank Transfer</option>
+                    <option value="WhatsApp Payment" style={{ background: '#111' }}>WhatsApp Payment</option>
+                    <option value="JazzCash" style={{ background: '#111' }}>JazzCash</option>
+                    <option value="EasyPaisa" style={{ background: '#111' }}>EasyPaisa</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.85rem', color: '#888', display: 'block', marginBottom: '0.3rem' }}>Note (Optional)</label>
+                  <input
+                    type="text"
+                    value={paymentNote}
+                    onChange={(e) => setPaymentNote(e.target.value)}
+                    placeholder="Any note..."
+                    className="premium-input"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  <button
+                    onClick={handlePaymentUpdate}
+                    className="premium-btn"
+                    style={{ flex: 1, background: '#10b981', borderColor: '#10b981' }}
+                  >
+                    <CheckCircle size={16} /> Record Payment
+                  </button>
+                  <button
+                    onClick={() => setPaymentModal(null)}
+                    className="premium-btn-outline"
+                    style={{ flex: 1 }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <style>{`
         @media (max-width: 768px) {
-          .admin-charts {
-            grid-template-columns: 1fr !important;
-          }
+          .admin-charts { grid-template-columns: 1fr !important; }
+          .enterprise-table { font-size: 0.8rem; }
+          .enterprise-table th, .enterprise-table td { padding: 0.5rem; }
         }
       `}</style>
     </DashboardLayout>

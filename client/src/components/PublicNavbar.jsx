@@ -54,7 +54,7 @@ export default function PublicNavbar() {
 
   return (
     <>
-      <motion.nav className="recco-nav" initial={{ y: -100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}>
+      <motion.nav className="reco-nav" initial={{ y: -100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}>
         <motion.div animate={{ backgroundColor: scrolled ? 'rgba(5, 5, 5, 0.75)' : 'rgba(5, 5, 5, 0)', backdropFilter: scrolled ? 'blur(20px)' : 'blur(0px)', borderColor: scrolled ? 'rgba(255, 215, 0, 0.1)' : 'rgba(255, 215, 0, 0)', boxShadow: scrolled ? '0 8px 32px rgba(0,0,0,0.3)' : '0 0 0 rgba(0,0,0,0)' }} transition={{ duration: 0.4 }} className="nav-bg-shell" />
         
         <Magnetic strength={0.2}>
@@ -62,7 +62,7 @@ export default function PublicNavbar() {
             <motion.div whileHover={{ rotate: 20, scale: 1.1 }} transition={{ type: 'spring', stiffness: 300, damping: 10 }} className="logo-icon-box">
               <Sparkles size={20} color="#000" />
             </motion.div>
-            <h1 className="gradient-text nav-title">RECCO</h1>
+            <h1 className="gradient-text nav-title">RECO</h1>
           </Link>
         </Magnetic>
 
@@ -141,7 +141,7 @@ export default function PublicNavbar() {
               <div className="logo-icon-box" style={{ width: '40px', height: '40px' }}>
                 <Sparkles size={22} color="#000" />
               </div>
-              <h1 className="gradient-text nav-title" style={{ fontSize: '1.8rem' }}>RECCO</h1>
+              <h1 className="gradient-text nav-title" style={{ fontSize: '1.8rem' }}>RECO</h1>
             </motion.div>
             
             <div className="mobile-links-container">
@@ -178,7 +178,7 @@ export default function PublicNavbar() {
       </AnimatePresence>
 
       <style>{`
-        .recco-nav { position: fixed; top: 0; left: 0; width: 100%; z-index: 1000; padding: 1.5rem 3rem; display: flex; justify-content: space-between; align-items: center; transition: padding 0.4s ease; }
+        .reco-nav { position: fixed; top: 0; left: 0; width: 100%; z-index: 1000; padding: 1.5rem 3rem; display: flex; justify-content: space-between; align-items: center; transition: padding 0.4s ease; }
         .nav-bg-shell { position: absolute; top: 0; left: 0; right: 0; bottom: 0; border-bottom: 1px solid; z-index: -1; }
         .nav-logo { text-decoration: none; display: flex; align-items: center; gap: 0.6rem; z-index: 2; }
         .logo-icon-box { width: 38px; height: 38px; background: linear-gradient(135deg, #FFD700, #FFA500); border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3); }
@@ -202,8 +202,8 @@ export default function PublicNavbar() {
         .mobile-auth-container { margin-top: 2.5rem; display: flex; flex-direction: column; gap: 1rem; width: 100%; max-width: 240px; }
         .mobile-auth-btn { text-align: center; padding: 1rem !important; font-size: 1.1rem !important; text-decoration: none; }
         @media (max-width: 1024px) { .desktop-nav-pill { display: none !important; } .desktop-auth-actions > * { display: none !important; } .mobile-menu-btn { display: block !important; } }
-        @media (max-width: 768px) { .recco-nav { padding: 1.2rem 1.5rem !important; } .nav-title { font-size: 1.3rem; } .logo-icon-box { width: 34px; height: 34px; } }
-        @media (max-width: 480px) { .recco-nav { padding: 1rem 1.2rem !important; } .mobile-link { font-size: 1.6rem; } }
+        @media (max-width: 768px) { .reco-nav { padding: 1.2rem 1.5rem !important; } .nav-title { font-size: 1.3rem; } .logo-icon-box { width: 34px; height: 34px; } }
+        @media (max-width: 480px) { .reco-nav { padding: 1rem 1.2rem !important; } .mobile-link { font-size: 1.6rem; } }
       `}</style>
     </>
   );

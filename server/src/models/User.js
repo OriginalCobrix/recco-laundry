@@ -6,7 +6,7 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, index: true },
   phone: { type: String, required: true, index: true },
   password: { type: String, required: true, select: false },
-  role: { type: String, enum: ['Admin', 'Customer', 'Washerman'], default: 'Customer' },
+  role: { type: String, enum: ['Admin', 'Customer'], default: 'Customer' },
   profilePicture: { type: String, default: '' },
   approvalStatus: { type: String, enum: ['Active', 'Pending Approval', 'Rejected'], default: 'Active' },
   rejectionReason: { type: String, default: '' },

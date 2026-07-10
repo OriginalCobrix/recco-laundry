@@ -136,7 +136,7 @@ export default function AdminServices() {
                 <tr key={s._id}>
                   <td style={{ fontWeight: 600 }}>{s.name}</td>
                   <td>{s.category}</td>
-                  <td>${s.price} ({s.priceType})</td>
+                  <td>Rs. {s.price} ({s.priceType})</td>
                   <td>
                     <span className={`badge ${s.isActive ? 'badge-active' : 'badge-cancelled'}`}>
                       {s.isActive ? 'Active' : 'Disabled'}

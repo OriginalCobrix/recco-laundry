@@ -1,8 +1,8 @@
-import { useContext, useState } from 'react';
+import { useContext } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, ShoppingBag, Users, LogOut, Settings, Bell, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Users, LogOut, Settings, Bell, Package } from 'lucide-react';
 
 export default function DashboardLayout({ children }) {
   const { user, logout } = useContext(AuthContext);
@@ -13,17 +13,12 @@ export default function DashboardLayout({ children }) {
 
   const links = {
     Customer: [
-      { name: 'Dashboard', path: '/customer-dashboard', icon: LayoutDashboard },
-      { name: 'Place Order', path: '/place-order', icon: ShoppingBag }
-    ],
-    Washerman: [
-      { name: 'Dashboard', path: '/washerman-dashboard', icon: LayoutDashboard },
-      { name: 'Tasks', path: '/washerman-dashboard', icon: ClipboardList }
+      { name: 'Dashboard', path: '/customer-dashboard', icon: LayoutDashboard }
     ],
     Admin: [
       { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
+      { name: 'Orders', path: '/admin/orders', icon: Package },
       { name: 'Users', path: '/admin/users', icon: Users },
-      { name: 'Orders', path: '/admin/orders', icon: ShoppingBag },
       { name: 'Services', path: '/admin/services', icon: Settings }
     ]
   };
@@ -35,7 +30,7 @@ export default function DashboardLayout({ children }) {
       <aside className="sidebar">
         <div className="sidebar-header logo-area">
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-            <h1 className="gradient-text sidebar-logo-text">RECCO</h1>
+            <h1 className="gradient-text sidebar-logo-text">RECO</h1>
           </motion.div>
         </div>
         <nav className="sidebar-nav">

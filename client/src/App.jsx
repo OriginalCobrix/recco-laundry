@@ -14,8 +14,6 @@ const Contact = lazy(() => import('./pages/Contact'));
 
 const Login = lazy(() => import('./pages/Login'));
 const CustomerDashboard = lazy(() => import('./pages/CustomerDashboard'));
-const WashermanDashboard = lazy(() => import('./pages/WashermanDashboard'));
-const PlaceOrder = lazy(() => import('./pages/PlaceOrder'));
 const PendingApproval = lazy(() => import('./pages/PendingApproval'));
 
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
@@ -44,8 +42,6 @@ const AnimatedRoutes = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/pending-approval" element={<PendingApproval />} />
         <Route element={<ProtectedRoute element={CustomerDashboard} roles={['Customer']} />} path="/customer-dashboard" />
-        <Route element={<ProtectedRoute element={PlaceOrder} roles={['Customer']} />} path="/place-order" />
-        <Route element={<ProtectedRoute element={WashermanDashboard} roles={['Washerman']} />} path="/washerman-dashboard" />
         <Route path="/admin" element={<ProtectedRoute element={AdminLayout} roles={['Admin']} />}>
           <Route index element={<AdminOverview />} />
           <Route path="users" element={<AdminUsers />} />

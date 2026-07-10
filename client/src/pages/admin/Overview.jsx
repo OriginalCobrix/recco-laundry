@@ -3,66 +3,58 @@ import { AuthContext } from '../../context/AuthContext';
 import api from '../../services/api';
 import { motion } from 'framer-motion';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell } from 'recharts';
-import { Users, ShoppingBag, DollarSign, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Users, ShoppingBag, DollarSign, CreditCard, Package, CheckCircle } from 'lucide-react';
 
 export default function AdminOverview() {
   const { user } = useContext(AuthContext);
   const [stats, setStats] = useState({});
-  const [washermen, setWashermen] = useState([]);
-  const [rejectingId, setRejectingId] = useState(null);
-  const [rejectReason, setRejectReason] = useState('');
+  const [orders, setOrders] = useState([]);
+
+  useEffect(() => {
+    fetchStats();
+    fetchOrders();
+  }, [user]);
 
   const fetchStats = async () => {
     try { const res = await api.get('/admin/stats'); setStats(res.data); } catch (e) { console.error(e); }
   };
 
-  const fetchWashermen = async () => {
-    try { 
-      const res = await api.get('/users'); 
-      setWashermen(res.data.filter(u => u.role === 'Washerman')); 
-    } catch (e) { console.error(e); }
-  };
-
-  useEffect(() => {
-    fetchStats();
-    fetchWashermen();
-  }, [user]);
-
-  const handleApproval = async (id, action) => {
+  const fetchOrders = async () => {
     try {
-      const payload = { washermanId: id, action };
-      if (action === 'Reject' && rejectingId === id) {
-        payload.rejectionReason = rejectReason;
-      }
-      await api.put('/admin/washerman-approval', payload);
-      setRejectingId(null);
-      setRejectReason('');
-      fetchWashermen();
+      const res = await api.get('/orders/all');
+      setOrders(res.data);
     } catch (e) { console.error(e); }
   };
+
+  const totalRevenue = orders.reduce((sum, o) => sum + (o.paidAmount || 0), 0);
+  const totalPendingPayments = orders.reduce((sum, o) => sum + ((o.price || 0) - (o.paidAmount || 0)), 0);
+  const activeOrders = orders.filter(o => o.status !== 'Completed' && o.status !== 'Cancelled');
+  const completedOrders = orders.filter(o => o.status === 'Completed');
 
   const revenueData = [
-    { name: 'Jan', revenue: 4000 }, { name: 'Feb', revenue: 3000 }, { name: 'Mar', revenue: 5000 }, { name: 'Apr', revenue: 4500 }, { name: 'May', revenue: 6000 }, { name: 'Jun', revenue: 8000 }
+    { name: 'Jan', revenue: 40000 }, { name: 'Feb', revenue: 30000 }, 
+    { name: 'Mar', revenue: 50000 }, { name: 'Apr', revenue: 45000 }, 
+    { name: 'May', revenue: 60000 }, { name: 'Jun', revenue: 80000 }
   ];
   const orderPieData = [
-    { name: 'Active', value: stats.activeOrders || 0 },
-    { name: 'Completed', value: stats.completedOrders || 0 },
-    { name: 'Pending', value: stats.todayOrders || 0 }
+    { name: 'Active', value: activeOrders.length },
+    { name: 'Completed', value: completedOrders.length },
+    { name: 'Pending', value: orders.filter(o => o.status === 'Pending').length }
   ];
   const PIE_COLORS = ['#FFD700', '#10b981', '#f59e0b'];
 
   const statCards = [
-    { title: 'Total Revenue', value: `$${stats.totalRevenue || 0}`, icon: DollarSign, color: '#10b981' },
-    { title: 'Total Orders', value: (stats.todayOrders || 0) + (stats.activeOrders || 0) + (stats.completedOrders || 0), icon: ShoppingBag, color: '#FFD700' },
-    { title: 'Total Customers', value: stats.totalCustomers || 0, icon: Users, color: '#3b82f6' },
-    { title: 'Pending Washermen', value: stats.pendingWashermen || 0, icon: Clock, color: '#ef4444' }
+    { title: 'Total Revenue', value: `Rs. ${totalRevenue.toLocaleString()}`, icon: DollarSign, color: '#10b981' },
+    { title: 'Total Orders', value: orders.length, icon: ShoppingBag, color: '#FFD700' },
+    { title: 'Active Orders', value: activeOrders.length, icon: Package, color: '#3b82f6' },
+    { title: 'Pending Payments', value: `Rs. ${totalPendingPayments.toLocaleString()}`, icon: CreditCard, color: '#ef4444' }
   ];
 
   return (
     <>
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ marginBottom: '2.5rem' }}>
         <h1 style={{ fontSize: '2.5rem' }}>Admin <span className="gradient-text">Control Center</span></h1>
-        <p style={{ color: 'var(--text-muted)' }}>Monitor metrics, manage users, and oversee operations.</p>
+        <p style={{ color: 'var(--text-muted)' }}>Monitor metrics, manage orders, and handle payments.</p>
       </motion.div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
@@ -115,62 +107,6 @@ export default function AdminOverview() {
           </ResponsiveContainer>
         </motion.div>
       </div>
-
-      <motion.div className="card-3d" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ padding: '1.5rem' }}>
-        <h3 style={{ marginBottom: '1.5rem' }}>Washerman Approvals & Management</h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="enterprise-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th>Status</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {washermen.length === 0 && (
-                <tr><td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>No Washermen registered yet.</td></tr>
-              )}
-              {washermen.map((w) => (
-                <tr key={w._id}>
-                  <td style={{ fontWeight: 600 }}>{w.name}</td>
-                  <td>{w.email}</td>
-                  <td>{w.phone}</td>
-                  <td>
-                    <span className={`badge ${w.approvalStatus === 'Active' ? 'badge-active' : w.approvalStatus === 'Rejected' ? 'badge-rejected' : 'badge-pending'}`}>
-                      {w.approvalStatus}
-                    </span>
-                    {w.approvalStatus === 'Rejected' && w.rejectionReason && (
-                      <span style={{ display: 'block', fontSize: '0.7rem', color: '#666', marginTop: '0.3rem' }}>Reason: {w.rejectionReason}</span>
-                    )}
-                  </td>
-                  <td style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
-                    {w.approvalStatus === 'Pending Approval' && (
-                      <>
-                        <button onClick={() => handleApproval(w._id, 'Approve')} className="premium-btn" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                          <CheckCircle size={14} /> Approve
-                        </button>
-                        {rejectingId === w._id ? (
-                          <div style={{ display: 'flex', gap: '0.3rem' }}>
-                            <input type="text" placeholder="Reason..." value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '0.4rem', color: '#fff', width: '120px' }} />
-                            <button onClick={() => handleApproval(w._id, 'Reject')} className="premium-btn-outline" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: '#ef4444', borderColor: '#ef4444' }}>Save</button>
-                          </div>
-                        ) : (
-                          <button onClick={() => setRejectingId(w._id)} className="premium-btn-outline" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: '#ef4444', borderColor: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                            <XCircle size={14} /> Reject
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </motion.div>
 
       <style>{`
         @media (max-width: 768px) {
